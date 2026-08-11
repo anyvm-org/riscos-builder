@@ -74,7 +74,14 @@ wc -c "$WORK/TimeSetup.orig"
 # hooks/host_enablessh.py writes it to disc as a real file with a real Tasks
 # entry, and host_finalizeImage.sh restores this script, so the shipped image
 # has no HTTP bootstrap and a stock TimeSetup.
-AGENT_URL="http://10.0.2.2:${VM_AGENT_HTTP_PORT:-8099}/anyvmd.py"
+#
+# 192.168.122.1:8000 is build.py's own web server (startWeb) serving the repo
+# root -- the same host and port ghostbsd fetches its answer file from. NOT
+# 10.0.2.2: that is QEMU's default slirp gateway, but build.py overrides the
+# network to net=192.168.122.0/24,host=192.168.122.1, so the default address
+# is nobody here. (A bare `-netdev user` does give 10.0.2.2, which is why
+# local testing outside the builder never noticed.)
+AGENT_URL="http://192.168.122.1:8000/files/anyvmd.py"
 cat > "$WORK/bootstrap.obey" <<EOF
 X Obey \$.Programming.Python.!Python27.!Boot
 X WimpSlot -min 6200k

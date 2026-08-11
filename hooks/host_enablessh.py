@@ -133,15 +133,7 @@ if "not found" in _ro_text.lower():
         "see the transcript above.")
     sys.exit(1)
 
-# The build-time scaffold has done its job; stop serving the agent so nothing
-# later can accidentally depend on it still being there.
-_ro_pid = os.path.join(_ro_work, "agent-http.pid")
-if os.path.exists(_ro_pid):
-    try:
-        with open(_ro_pid) as _fh:
-            os.kill(int(_fh.read().strip()), 15)
-        log("riscos enablessh: stopped the agent HTTP server")
-    except (OSError, ValueError) as _exc:
-        log("riscos enablessh: could not stop the HTTP server: %s" % _exc)
-
+# Nothing to tear down: the agent was fetched from build.py's own web server
+# (startWeb), which the engine owns and stops itself. This hook used to kill
+# a private server it had started, which is gone.
 log("riscos enablessh: agent installed on disc and registered as a Task")

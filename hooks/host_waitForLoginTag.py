@@ -17,15 +17,18 @@
 # looks for VM_TELNET_PROBE_MARKER coming back, which nothing but the agent
 # can produce.
 #
-# Getting there is a chain, and every link fails the same way from outside
-# (a probe that never answers), so the log points at which one broke:
+# Getting there is a chain, and every link fails the same way from outside --
+# a probe that never answers:
 #   the patched Tasks template ran  ->  Python 2.7.2 started in a 6200K
-#   WimpSlot  ->  the guest reached the build host over slirp at 10.0.2.2
-#   ->  it fetched files/anyvmd.py  ->  the agent bound port 23.
-# build/agent-http.log tells you how far it got. A fetch logged as HTTP/1.0
-# is the guest (Python 2's urllib); HTTP/1.1 is the build host's own health
-# check from the beforeBuild hook, so one lone 1.1 line means the guest never
-# asked.
+#   WimpSlot  ->  the guest reached the build host over slirp at
+#   192.168.122.1  ->  it fetched files/anyvmd.py from build.py's own web
+#   server  ->  the agent bound port 23.
+# There is no access log to consult: startWeb() sends that server's output to
+# DEVNULL. What this hook can offer instead is the console -- RISC OS writes
+# nothing to serial, but the web console screenshot build.py captures shows
+# how far the desktop got, and a boot stopped on an error box is the classic
+# shape (an un-X-prefixed command in an injected script, which this guest
+# cannot dismiss because it has no keyboard).
 
 import time as _ro_time
 
@@ -42,10 +45,12 @@ while _ro_time.time() < _ro_deadline:
 
 if not _ro_up:
     log("FATAL: riscos waitForLoginTag: the agent never answered the probe.")
-    log("       No guest fetch in the log below means the patched Tasks "
-        "template did not run, or the guest has no network. A fetch with no "
-        "probe answer afterwards means Python started and then died.")
-    sh("cat %s/agent-http.log || true" % (env("VM_WORKDIR") or "build"))
+    log("       Look at the captured console below and at screen.png in the "
+        "build artifacts: a desktop with an error box means an injected "
+        "script raised one (every line must be X-prefixed -- this guest has "
+        "no keyboard to dismiss it); a bare desktop means the Tasks entry "
+        "ran but Python or the fetch failed.")
+    sh("cat _screenText.txt 2>/dev/null || true")
     sys.exit(1)
 
 log("riscos waitForLoginTag: agent is answering")

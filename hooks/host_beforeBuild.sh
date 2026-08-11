@@ -92,37 +92,20 @@ fi
 ls -l "$ZIP"
 
 # ---------------------------------------------------------------------------
-# 3. Serve the agent for the injected bootstrap to fetch.
+# 3. Serving the agent to the guest: nothing to do here.
 #
-# It has to be listening before the guest boots, which is why it starts here
-# and not in the enablessh hook.  10.0.2.2 is the slirp gateway, i.e. this
-# host, so the server binds loopback and is reachable from nowhere else.
-# hooks/host_enablessh.py stops it once the agent is installed on disc.
+# build.py's startWeb() already runs `python -m http.server` over the REPO
+# ROOT, on the default port 8000, and it starts immediately after this hook
+# and before the VM does -- so files/anyvmd.py is reachable from inside the
+# guest as http://192.168.122.1:8000/files/anyvmd.py by the time the injected
+# bootstrap runs. That is the same host and port ghostbsd already fetches its
+# install answer file from.
+#
+# This hook used to stand up its own server on 8099 and point the bootstrap
+# at 10.0.2.2. Both were wrong: build.py configures slirp as
+# net=192.168.122.0/24,host=192.168.122.1, so 10.0.2.2 -- QEMU's DEFAULT
+# gateway, which is what a bare `-netdev user` gives you and therefore what
+# local testing saw -- is not the host here and never answers.
 # ---------------------------------------------------------------------------
-SERVE="$WORK/serve"
-mkdir -p "$SERVE"
-cp "$FILES/anyvmd.py" "$SERVE/anyvmd.py"
-if [ -f "$WORK/agent-http.pid" ] && kill -0 "$(cat "$WORK/agent-http.pid")" 2>/dev/null; then
-    echo "--- agent HTTP server already running ---"
-else
-    # --directory rather than a subshell `cd`: $WORK is relative (build.py
-    # sets VM_WORKDIR="build"), so cd-ing first made the redirect target
-    # build/agent-http.log resolve against build/serve, which does not exist.
-    # The server then never started and the health check below failed with a
-    # connection refused that said nothing about the real cause.
-    #
-    # No setsid either -- it can fork, in which case $! is setsid's pid and
-    # not the server's, so the pid file would kill the wrong thing. A plain
-    # background job is enough: it only has to outlive this hook, and the
-    # whole build runs inside one workflow step.
-    python3 -m http.server "${VM_AGENT_HTTP_PORT:-8099}" \
-        --bind 127.0.0.1 --directory "$SERVE" \
-        > "$WORK/agent-http.log" 2>&1 &
-    echo $! > "$WORK/agent-http.pid"
-    sleep 2
-fi
-curl -fsS -o /dev/null "http://127.0.0.1:${VM_AGENT_HTTP_PORT:-8099}/anyvmd.py" \
-    && echo "--- agent HTTP server is up on ${VM_AGENT_HTTP_PORT:-8099} ---" \
-    || { echo "FATAL: the agent HTTP server did not come up" >&2; exit 1; }
 
 echo "=== riscos beforeBuild: done ==="
