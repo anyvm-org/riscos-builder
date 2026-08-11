@@ -11,8 +11,16 @@
 # thrown away and silently replaced by a pristine one.
 #
 # Three things happen:
-#   1. resize to a power of two -- QEMU's SD card model requires it, and
-#      ROOL's image is 1966080000 bytes.
+#   1. resize to 4 GiB, because QEMU will not attach ROOL's disc as an SD
+#      card at its native size. sd_realize() in hw/sd/sd.c enforces two
+#      different rules depending on which side of SDSC_MAX_CAPACITY (2 GiB,
+#      sd.c:58) the image falls on: at or below it the size must be a power
+#      of two, above it a non-eMMC card only has to be a multiple of 512 KiB.
+#      ROOL's image is 1966080000 bytes -- just under the 2 GiB line, so it
+#      lands in the power-of-two branch and is rejected. 4 GiB clears the
+#      line and satisfies both rules, which is also why
+#      hooks/host_finalizeImage.sh can shrink back to exactly this size after
+#      the engine has padded the disc out to 204 GiB.
 #   2. lift RISCOS.IMG out of the FAT boot partition, so the ROM always
 #      matches the release instead of being fetched separately.
 #   3. patch one cosmetic boot script with a bootstrap that fetches the agent.
@@ -38,7 +46,7 @@ PAD=$((4 * 1024 * 1024 * 1024))
 
 echo "=== riscos prepareImage ==="
 
-echo "--- resizing to $PAD (QEMU's SD model needs a power of two) ---"
+echo "--- resizing to $PAD (clears QEMU's 2 GiB SDSC power-of-two rule) ---"
 qemu-img resize "$QCOW" "$PAD"
 qemu-img info "$QCOW" | sed 's/^/    /'
 
@@ -89,6 +97,15 @@ X /<Python27\$Dir>.python27 -c "import urllib;exec(urllib.urlopen('$AGENT_URL').
 EOF
 echo "--- bootstrap ---"
 sed 's/^/    /' "$WORK/bootstrap.obey"
+
+# hooks/host_finalizeImage.sh scans the finished disc for this exact string to
+# prove no bootstrap survived into the shipped image. Hand it the URL rather
+# than letting it invent its own marker: the URL is the one part of the
+# bootstrap nothing else on the volume can contain. Matching on the code
+# instead does NOT work -- a `urllib.urlopen` scan finds 21 hits on a stock
+# RISC OS disc, all of them Python 2.7's own urllib.py, its .pyc and its test
+# suite, so that check could never pass.
+printf '%s\n' "$AGENT_URL" > "$WORK/bootstrap.marker"
 
 python3 "$TOOL" "$NBD" patch "$TEMPLATE" "$WORK/bootstrap.obey" --prefix "$STOCK_PREFIX"
 
