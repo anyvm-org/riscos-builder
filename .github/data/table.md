@@ -19,6 +19,13 @@
 > 5.30 zip answers 200 while the identically-shaped 5.28 URL answers 404 --
 > so a new release **replaces** this row rather than adding one.
 
+> **Linux x86_64 hosts only.** The patched QEMU below is published for that
+> platform alone, and there is no system fallback -- no released QEMU can boot
+> RISC OS on a raspi machine at all. `anyvm.py` fails fast with that message on
+> any other host rather than starting an emulator that cannot work. macOS and
+> Windows would need the same patched build produced on those runners; that is
+> not done yet.
+
 > **No working RISC OS port of QEMU existed, so this builder makes one.**
 > `files/qemu-riscos-raspi.patch` is eight fixes plus a new USB NIC model,
 > built by `files/build-qemu-riscos.sh` and published as this repo's own

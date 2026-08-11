@@ -89,8 +89,20 @@ cp "$FILES/anyvmd.py" "$SERVE/anyvmd.py"
 if [ -f "$WORK/agent-http.pid" ] && kill -0 "$(cat "$WORK/agent-http.pid")" 2>/dev/null; then
     echo "--- agent HTTP server already running ---"
 else
-    ( cd "$SERVE" && setsid python3 -m http.server "${VM_AGENT_HTTP_PORT:-8099}" \
-        --bind 127.0.0.1 > "$WORK/agent-http.log" 2>&1 & echo $! > "$WORK/agent-http.pid" )
+    # --directory rather than a subshell `cd`: $WORK is relative (build.py
+    # sets VM_WORKDIR="build"), so cd-ing first made the redirect target
+    # build/agent-http.log resolve against build/serve, which does not exist.
+    # The server then never started and the health check below failed with a
+    # connection refused that said nothing about the real cause.
+    #
+    # No setsid either -- it can fork, in which case $! is setsid's pid and
+    # not the server's, so the pid file would kill the wrong thing. A plain
+    # background job is enough: it only has to outlive this hook, and the
+    # whole build runs inside one workflow step.
+    python3 -m http.server "${VM_AGENT_HTTP_PORT:-8099}" \
+        --bind 127.0.0.1 --directory "$SERVE" \
+        > "$WORK/agent-http.log" 2>&1 &
+    echo $! > "$WORK/agent-http.pid"
     sleep 2
 fi
 curl -fsS -o /dev/null "http://127.0.0.1:${VM_AGENT_HTTP_PORT:-8099}/anyvmd.py" \
