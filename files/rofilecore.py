@@ -96,11 +96,30 @@ def _parse_at(m, mag):
     return Dir(mag, mag - 4, dirname.decode("latin-1"), parent, ents)
 
 
+def _map_size(fh):
+    """Bytes to map for `fh`, whether it is a file or a block device.
+
+    mmap(fd, 0) means "the whole file", but a block device reports st_size 0,
+    so length 0 is rejected with EINVAL -- which is exactly what happens when
+    this tool is pointed at the /dev/nbd0 that the prepareImage hook attaches
+    the qcow2 to. Seeking to the end works for both: on a block device lseek
+    reports the device size."""
+    size = os.fstat(fh.fileno()).st_size
+    if size:
+        return size
+    size = os.lseek(fh.fileno(), 0, os.SEEK_END)
+    os.lseek(fh.fileno(), 0, os.SEEK_SET)
+    if not size:
+        raise SystemExit("cannot determine the size of %s" % fh.name)
+    return size
+
+
 class Volume(object):
     def __init__(self, path):
         self.path = path
         self.fh = open(path, "rb")
-        self.m = mmap.mmap(self.fh.fileno(), 0, access=mmap.ACCESS_READ)
+        self.m = mmap.mmap(self.fh.fileno(), _map_size(self.fh),
+                           access=mmap.ACCESS_READ)
         self.dirs = []
         idx = 0
         while True:
