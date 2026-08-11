@@ -55,10 +55,19 @@ fi
 # ---------------------------------------------------------------------------
 if [ ! -f "$ZIP" ]; then
     echo "--- downloading $ZIP_URL ---"
-    # Segmented where the server allows it; ROOL answers Range requests.
-    if command -v aria2c >/dev/null 2>&1; then
-        aria2c -c -x8 -s8 -d "$WORK" -o "$(basename "$ZIP")" "$ZIP_URL"
+    # aria2c first (segmented; ROOL answers Range requests), curl as the
+    # fallback -- and the fallback is not theoretical. On ubuntu-24.04 runners
+    # aria2c cannot complete a TLS handshake with riscosopen.org at all:
+    #   SSL/TLS handshake failure: A TLS fatal alert has been received.
+    # curl to the same URL from the same runner is fine, so this is aria2's
+    # TLS backend, not the network. Trying aria2c inside the `if` keeps
+    # `set -e` from killing the build on that failure.
+    if command -v aria2c >/dev/null 2>&1 \
+       && aria2c -c -x8 -s8 -d "$WORK" -o "$(basename "$ZIP")" "$ZIP_URL"; then
+        echo "--- fetched with aria2c ---"
     else
+        echo "--- aria2c unavailable or failed; falling back to curl ---"
+        rm -f "$ZIP"
         curl -fL --retry 3 -o "$ZIP" "$ZIP_URL"
     fi
 else
