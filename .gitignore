@@ -13,8 +13,10 @@ build-*.log
 *.imgzip
 *.img
 RISCOS.IMG
-# the patched QEMU tarball, built by files/build-qemu-riscos.sh
+# the patched QEMU tarball, built by files/build-qemu-riscos.sh, and the
+# directory build.py unpacks it into at the repo root
 qemu-*.tar.zst
+qemu10-*/
 # python bytecode caches (hooks/upstream_check.py imports gendata)
 __pycache__/
 *.pyc

@@ -26,8 +26,17 @@ import tarfile as _ro_tarfile
 import time as _ro_time
 
 _ro_port = int(read_state(env("VM_OS_NAME"), "sshport") or "2222")
-_ro_files = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "files")
-_ro_work = env("VM_WORKDIR") or "build"
+
+# A host_*.py hook is exec()'d INTO build.py's own globals, so `__file__` here
+# is build.py -- NOT this file. dirname() is therefore already the repo root,
+# and the "hooks/.. " step a reader expects would climb one level too far
+# (that shipped once: '<repo>/../files/anyvmd.py: No such file or directory').
+# The .sh hooks are real subprocesses and do compute HERE/../files correctly.
+_ro_files = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
+if not os.path.isdir(_ro_files):
+    log("FATAL: riscos enablessh: cannot find the files/ directory (looked in "
+        "%s)" % _ro_files)
+    sys.exit(1)
 
 AGENT_DIR = "/AnyVM"                       # RISC OS $.AnyVM
 AGENT_RO = "$.AnyVM.anyvmd/py"
