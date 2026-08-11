@@ -62,7 +62,9 @@ MTOOLS_SKIP_CHECK=1 mcopy -o -i "$RAW@@$((fat_start * 512))" ::RISCOS.IMG "$OUT/
 ls -l "$OUT/RISCOS.IMG"
 
 # The raw image is several GB; the release job has no use for it afterwards
-# and the runner's disk is not generous.
-rm -f "$RAW" "$ZIP"
+# and the runner's disk is not generous. One explicit path per rm, guarded
+# rather than forced -- no -f, no wildcard, nothing recursive.
+if [ -f "$RAW" ]; then rm "$RAW"; fi
+if [ -f "$ZIP" ]; then rm "$ZIP"; fi
 
 echo "=== extract-rom: done ==="
