@@ -40,7 +40,12 @@ echo "=== riscos beforeBuild ==="
 # ---------------------------------------------------------------------------
 if [ ! -f "$WORK/qemu-10.2.3-riscos-arm-noble.tar.zst" ]; then
     echo "--- building the patched QEMU ---"
-    "$FILES/build-qemu-riscos.sh"
+    # Invoked through `bash` rather than executed, exactly as netbsd-builder
+    # and openbsd-builder invoke theirs. Nothing in files/ carries the
+    # executable bit in this fleet -- a repo authored on Windows cannot
+    # record one -- so running it directly fails with "Permission denied"
+    # and exit 126, which is what happened on the first CI run.
+    bash "$FILES/build-qemu-riscos.sh" "$WORK"
 else
     echo "--- patched QEMU tarball already present ---"
 fi
