@@ -35,6 +35,22 @@ mkdir -p "$WORK"
 echo "=== riscos beforeBuild ==="
 
 # ---------------------------------------------------------------------------
+# 0. Host deps.
+#
+# mtools is the one the runner does not already have, and it is needed by
+# hooks/host_prepareImage.sh to lift RISCOS.IMG out of the image's FAT boot
+# partition. Installed here, in the FIRST hook, so prepareImage can rely on
+# it -- discovering it missing there costs a QEMU build and a 155 MB download
+# first. Everything else these hooks reach for is already on the runner:
+# partx, fdisk, qemu-img, qemu-nbd, curl, patch, make. The archive itself is
+# never unzipped here -- _prep_vhd_disk() does that with Python's zipfile.
+# ---------------------------------------------------------------------------
+echo "--- host deps ---"
+export DEBIAN_FRONTEND=noninteractive
+sudo -E apt-get update -q
+sudo -E apt-get install -y -q --no-install-recommends mtools
+
+# ---------------------------------------------------------------------------
 # 1. The patched QEMU.  Built here rather than committed: 30 MB of binaries do
 #    not belong in git, and this repo must not reach for a sibling's copy.
 # ---------------------------------------------------------------------------
