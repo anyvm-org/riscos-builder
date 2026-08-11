@@ -1,0 +1,201 @@
+name: "Build"
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  push:
+    branches:
+      - '*'
+    paths:
+      - 'build.py'
+      - '.github/workflows/build.yml'
+      - '*.txt'
+      - 'conf/*'
+      - 'hooks/*'
+  pull_request:
+    branches:
+      - '*'
+    paths:
+      - 'build.py'
+      - '.github/workflows/build.yml'
+      - '*.txt'
+      - 'conf/*'
+      - 'hooks/*'
+  workflow_dispatch:
+
+  release:
+    types: [ created ]
+
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["5.30-armv7"]
+    runs-on: ubuntu-24.04
+    steps:
+#    - name: Free Disk Space (Ubuntu)
+#      uses: jlumbroso/free-disk-space@main
+#      with:
+#        # this might remove tools that are actually needed,
+#        # if set to "true" but frees about 6 GB
+#        tool-cache: false
+    - uses: actions/checkout@v7
+    - name: Creating Web console
+      uses: anyvm-org/cf-tunnel@v0
+      id: tunnel
+      with:
+        protocol: http
+        port: 8000
+    - run: |
+        python3 build.py conf/riscos-${{ matrix.os }}.conf
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        # One artifact per matrix job, so they don't collide and each can be
+        # downloaded independently from the run page.
+        name: riscos-${{ matrix.os }}
+        # build.py writes all generated files (including these release
+        # artifacts) under build/ to keep the repo root clean; see wf().
+        path: |
+          build/riscos-${{ matrix.os }}.qcow2.zst*
+          build/riscos-${{ matrix.os }}-id_rsa.pub
+          build/riscos-${{ matrix.os }}-host.id_rsa
+          build/riscos-${{ matrix.os }}.qemu
+          build/riscos-${{ matrix.os }}.profile.json
+        if-no-files-found: warn
+        # qcow2.zst is already maximally compressed; gzip-recompressing the
+        # bundle just burns CPU for ~0 savings.
+        compression-level: 0
+        # Auto-expire to keep the repo's artifact storage quota from growing
+        # unboundedly. Two days is enough for a human to grab a copy for
+        # local verification; anything that needs to persist longer should
+        # cut a release (which goes through the Upload Release Asset step
+        # below and lives forever).
+        retention-days: 2
+    - name: Upload Release Asset
+      # Gate on the event, not github.ref: for a 'release' event github.ref is
+      # NOT guaranteed to be refs/tags/<tag> -- depending on how the release/tag
+      # is created it can come through as refs/heads/<target_commitish> (e.g.
+      # refs/heads/main), which silently skips the upload. event_name is stable.
+      if: "github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')"
+      id: upload-release-asset
+      uses: softprops/action-gh-release@v3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        # action-gh-release derives the tag from github.ref by default, but on a
+        # 'release' event github.ref can be refs/heads/<branch> (not a tag), which
+        # fails with "GitHub Releases requires a tag". Pass the tag explicitly:
+        # release event -> github.event.release.tag_name; tag push -> github.ref_name.
+        tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+        files: |
+          build/riscos-${{ matrix.os }}.qcow2.zst*
+          build/riscos-${{ matrix.os }}-id_rsa.pub
+          build/riscos-${{ matrix.os }}-host.id_rsa
+          build/riscos-${{ matrix.os }}.qemu
+          build/riscos-${{ matrix.os }}.profile.json
+
+
+  # Publish the generated release index (gendata's .github/data/releases.json)
+  # as a release asset, so external consumers reference it by an explicit
+  # builder version -- .../releases/download/v<ver>/releases.json -- exactly
+  # like the images and their sidecars. The index and the images it describes
+  # are then a matched, reproducible pair from one release; nothing downstream
+  # has to read a moving branch through raw.githubusercontent.
+  # A single job, NOT part of the build matrix: every matrix job uploading the
+  # same asset name in parallel would race (GitHub rejects duplicate asset
+  # names), and the index must publish even if one image build fails.
+  release-index:
+    # Gate on the event, not github.ref: a 'release' event's github.ref can be
+    # refs/heads/<branch>, which silently skips the upload. event_name is stable.
+    if: "github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')"
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v7
+    - name: Upload release index Asset
+      uses: softprops/action-gh-release@v3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        # Pass the tag explicitly, same reason as the step above.
+        tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+        files: |
+          .github/data/releases.json
+
+
+
+
+
+
+
+
+
+
+  # Publish the two assets anyvm.py needs at run time, neither of which can
+  # come from anywhere but this repo's own release:
+  #
+  #   qemu-10.2.3-riscos-arm-noble.tar.zst
+  #     The patched QEMU. Unlike the pinned builds other builders publish,
+  #     this is not "newer than the distro build" -- NO released QEMU can boot
+  #     RISC OS on a raspi machine at all, so there is nothing to fall back
+  #     to. Assembled from upstream sources by files/build-qemu-riscos.sh --
+  #     the same script hooks/host_beforeBuild.sh runs, so what ships here is
+  #     exactly what the images are built and verified on. No prebuilt
+  #     binaries live in git and no sibling builder's assets are referenced.
+  #
+  #   RISCOS.IMG
+  #     The ROM. The raspi machines have no firmware of their own for QEMU to
+  #     fall back on, so the guest cannot start without it, and it cannot be
+  #     read out of the qcow2 at run time -- that would mean parsing a
+  #     partition table and a FAT volume on every boot. Lifted from ROOL's own
+  #     image by hooks/host_prepareImage.sh, so it always matches the release.
+  #
+  #     On redistribution: this repo vendors nothing from RISC OS Open and
+  #     downloads their SD image at build time, but the published qcow2 IS a
+  #     derivative of that image, so the ROM beside it adds no redistribution
+  #     that the image itself does not already carry.
+  #
+  # A single job, NOT part of the build matrix: every matrix job uploading the
+  # same asset name in parallel would race (GitHub rejects duplicate asset
+  # names), and the upload should not depend on any one image build
+  # succeeding. Injected via UPLOAD_FILES_JOB in .github/data/datafile.ini.
+  release-files:
+    # Gate on the event, not github.ref: a 'release' event's github.ref can be
+    # refs/heads/<branch>, which silently skips the upload. event_name is stable.
+    if: "github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')"
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+    - name: Build the patched QEMU
+      run: bash files/build-qemu-riscos.sh build
+    - name: Extract the ROM from RISC OS Open's SD image
+      run: bash files/extract-rom.sh build
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        # Pass the tag explicitly: action-gh-release derives it from github.ref
+        # by default, but on a 'release' event that can be a branch ref, failing
+        # with "GitHub Releases requires a tag".
+        tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+        files: |
+          build/qemu-10.2.3-riscos-arm-noble.tar.zst
+          build/RISCOS.IMG
+
+
+
+
+
+
+
+
