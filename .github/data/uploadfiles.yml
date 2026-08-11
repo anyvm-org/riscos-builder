@@ -1,0 +1,51 @@
+  # Publish the two assets anyvm.py needs at run time, neither of which can
+  # come from anywhere but this repo's own release:
+  #
+  #   qemu-10.2.3-riscos-arm-noble.tar.zst
+  #     The patched QEMU. Unlike the pinned builds other builders publish,
+  #     this is not "newer than the distro build" -- NO released QEMU can boot
+  #     RISC OS on a raspi machine at all, so there is nothing to fall back
+  #     to. Assembled from upstream sources by files/build-qemu-riscos.sh --
+  #     the same script hooks/host_beforeBuild.sh runs, so what ships here is
+  #     exactly what the images are built and verified on. No prebuilt
+  #     binaries live in git and no sibling builder's assets are referenced.
+  #
+  #   RISCOS.IMG
+  #     The ROM. The raspi machines have no firmware of their own for QEMU to
+  #     fall back on, so the guest cannot start without it, and it cannot be
+  #     read out of the qcow2 at run time -- that would mean parsing a
+  #     partition table and a FAT volume on every boot. Lifted from ROOL's own
+  #     image by hooks/host_prepareImage.sh, so it always matches the release.
+  #
+  #     On redistribution: this repo vendors nothing from RISC OS Open and
+  #     downloads their SD image at build time, but the published qcow2 IS a
+  #     derivative of that image, so the ROM beside it adds no redistribution
+  #     that the image itself does not already carry.
+  #
+  # A single job, NOT part of the build matrix: every matrix job uploading the
+  # same asset name in parallel would race (GitHub rejects duplicate asset
+  # names), and the upload should not depend on any one image build
+  # succeeding. Injected via UPLOAD_FILES_JOB in .github/data/datafile.ini.
+  release-files:
+    # Gate on the event, not github.ref: a 'release' event's github.ref can be
+    # refs/heads/<branch>, which silently skips the upload. event_name is stable.
+    if: "github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')"
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+    - name: Build the patched QEMU
+      run: bash files/build-qemu-riscos.sh build
+    - name: Extract the ROM from RISC OS Open's SD image
+      run: bash files/extract-rom.sh build
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        # Pass the tag explicitly: action-gh-release derives it from github.ref
+        # by default, but on a 'release' event that can be a branch ref, failing
+        # with "GitHub Releases requires a tag".
+        tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+        files: |
+          build/qemu-10.2.3-riscos-arm-noble.tar.zst
+          build/RISCOS.IMG

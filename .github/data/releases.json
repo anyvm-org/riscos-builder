@@ -1,0 +1,14 @@
+{
+  "os": "riscos",
+  "releases": [
+    {
+      "tag": "5.30-armv7",
+      "release": "5.30",
+      "arch": "armv7",
+      "sync": "tar",
+      "shutdown": "X Shutdown",
+      "desktop": false,
+      "build": true
+    }
+  ]
+}

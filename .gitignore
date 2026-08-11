@@ -1,0 +1,25 @@
+# local build outputs (multi-GB qcow2/zst artifacts; keeping them out of git
+# also keeps them out of any `git stash -u` during pulls)
+build/
+build-out-*/
+build-failed-*/
+build-*.log
+*.qcow2
+*.qcow2.xz
+*.qcow2.zst
+# RISC OS Open's SD image and everything unpacked from it. Nothing upstream
+# is vendored here -- hooks/host_beforeBuild.sh and files/extract-rom.sh
+# fetch it at build time -- so none of it may ever be committed.
+*.imgzip
+*.img
+RISCOS.IMG
+# the patched QEMU tarball, built by files/build-qemu-riscos.sh
+qemu-*.tar.zst
+# python bytecode caches (hooks/upstream_check.py imports gendata)
+__pycache__/
+*.pyc
+# build.py web-console runtime leftovers
+index.html
+screen.txt
+screen.png
+_screenText.txt

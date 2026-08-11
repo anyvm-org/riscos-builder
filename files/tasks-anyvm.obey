@@ -1,0 +1,10 @@
+| Start the anyvm agent.  Installed by riscos-builder.
+|
+| TaskWindow, not a plain Run: the agent serves for as long as the machine is
+| up, and single-tasking Python would freeze the desktop for that whole time.
+|
+| Every line is X-prefixed.  An error raised from a boot script stops the boot
+| on a dialog that waits for a keypress, and the BCM2835 ROM has no USB
+| keyboard driver, so that wait would never end.
+X Obey $.Programming.Python.!Python27.!Boot
+X TaskWindow "/<Python27$Dir>.python27 $.AnyVM.anyvmd/py" -wimpslot 6200k -name anyvmd -quit
