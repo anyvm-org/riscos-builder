@@ -7,8 +7,10 @@
 <!-- arch-label: armv7 = armv7 (ARM 32-bit, Cortex-A7) -->
 
 > **Note:** RISC OS support is a **tech preview**. Remote command execution
-> and file sync both work; the desktop comes up and is usable over the VNC
-> console with a mouse. There is **no keyboard** -- see below.
+> and file sync both work, and the desktop comes up and is visible on the VNC
+> console. There is **no keyboard** -- see below. Pointer input is untested:
+> the ROM does carry a `usbmouse` driver, but no USB mouse has been attached
+> to this guest, so nothing here claims it works.
 
 > **Nothing from RISC OS Open is redistributed here.** The builder downloads
 > the official Raspberry Pi SD card image from `riscosopen.org` at build time;
