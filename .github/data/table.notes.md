@@ -1,10 +1,9 @@
 <!-- arch-label: armv7 = armv7 (ARM 32-bit, Cortex-A7) -->
 
 > **Note:** RISC OS support is a **tech preview**. Remote command execution
-> and file sync both work, and the desktop comes up and is visible on the VNC
-> console. There is **no keyboard** -- see below. Pointer input is untested:
-> the ROM does carry a `usbmouse` driver, but no USB mouse has been attached
-> to this guest, so nothing here claims it works.
+> and file sync both work, and the desktop comes up on the VNC console, where
+> a USB keyboard and mouse work (`anyvm` attaches `usb-kbd` and `usb-mouse`)
+> -- see "Keyboard and mouse" below for the QEMU fix that needs.
 
 > **Nothing from RISC OS Open is redistributed here.** The builder downloads
 > the official Raspberry Pi SD card image from `riscosopen.org` at build time;
@@ -27,7 +26,8 @@
 > to do with RISC OS: three in `hcd-dwc2.c` (the frame counter divided
 > elapsed time by the frame interval in PHY clocks rather than the frame
 > time; `GINTSTS_HCHINT` was raised but never lowered; the bus was started
-> from `dwc2_attach()` instead of on the HPRT0 port-enable edge), and one in
+> from `dwc2_attach()` instead of on the HPRT0 port-enable edge -- and must
+> also be restarted when a port reset completes, see below), and one in
 > `bcm2835_dma.c`, where `xlen -= 4` on a `uint32_t` byte count wraps for any
 > length that is not a multiple of four -- the loop then spins about 2^30
 > times, scribbling over guest memory as it goes. The RISC OS specific ones
@@ -37,16 +37,24 @@
 > model of the SMSC LAN9512 that is the real Pi 2's NIC -- the guest has a
 > driver for it and for nothing else QEMU offers.
 
-> **There is no keyboard, and that is a RISC OS limitation.** The BCM2835 ROM
-> ships no USB keyboard driver at all: its USB tree has
-> `USBDriver/build/c/usbmouse` and nothing for keyboards, the boot prints
-> `No keyboard present - autobooting`, and a whole boot's worth of USB traffic
-> is `ep0` control transfers with zero interrupt-endpoint packets. Every HID
-> device is reported as `[error &24425355]`, and `&24425355` is ASCII `"USB$"`
-> -- USBDriver's "attached, no driver" tag. So there is no console to type an
-> installer into, and the guest is prepared by patching the disc image offline
-> instead (`files/rofilecore.py` parses FileCore's `SBPr` "BigDir" directories
-> and overwrites one cosmetic boot script in place, at its existing length).
+> **Keyboard and mouse.** An earlier version of this note claimed the Pi ROM
+> has no USB keyboard driver. It does: ROOL's `USBDriver` compiles in
+> boot-protocol keyboard and mouse drivers (`build/c/usbkboard`,
+> `build/c/usbmouse`), and `No keyboard present - autobooting` only means the
+> kernel's 5-second boot-time USB discovery found nothing that early -- the
+> Wimp rescans the bus when it starts. What actually blocked input was this
+> builder's own QEMU patch: SOF framing was restarted on the port-enable edge
+> only, so the second port reset RISC OS issues at Wimp startup left the frame
+> counter frozen and no interrupt transfer was ever issued after it (the
+> keyboard driver attached, opened its interrupt pipe, and waited forever --
+> riscos-vm#12). With the reset case handled, `-device usb-kbd` types into the
+> desktop and `-device usb-mouse` moves the pointer; QEMU's `usb-tablet` does
+> not, because it rejects `SET_PROTOCOL`, which RISC OS's mouse driver
+> requires. RISC OS still has no *text* console -- it consoles on the
+> framebuffer and writes nothing to serial -- so the guest is prepared by
+> patching the disc image offline rather than typing an installer in
+> (`files/rofilecore.py` parses FileCore's `SBPr` "BigDir" directories and
+> overwrites one cosmetic boot script in place, at its existing length).
 >
 > Three things about that image will bite anyone who touches it. The live boot
 > tree **does not exist** in a freshly downloaded image -- RISC OS copies
@@ -54,8 +62,8 @@
 > patching the pristine image patches a template that is never run, and
 > patching a booted one lands somewhere else entirely. Every injected command
 > must be prefixed with `X` (`*X <cmd>` runs it and discards any error),
-> because one error stops the boot on a dialog waiting for a keypress that
-> can never come. And injected scripts must print **nothing**: any console
+> because one error stops the boot on a dialog waiting for a keypress, and
+> the build attaches no keyboard. And injected scripts must print **nothing**: any console
 > output from a Tasks hook opens the Wimp's single-tasking output screen,
 > which waits for a keypress at the end -- same brick, different cause.
 

@@ -2,8 +2,9 @@
 """Read a RISC OS FileCore volume out of a raw disc image, and patch a file
 in place.
 
-RISC OS on the Pi has no USB keyboard driver, so there is no console to type
-an installer into (see conf/riscos-5.30-armv7.conf). The only way to get the
+RISC OS has no text console to type an installer into -- it consoles on the
+framebuffer and writes nothing to serial, so build.py's console-driven
+install path cannot drive it (see conf/riscos-5.30-armv7.conf). The only way to get the
 anyvm agent into the guest is to modify the disc before the first boot, and
 the only modification that is safe without a FileCore writer is overwriting
 an existing file's data IN PLACE at its existing byte length -- no allocation

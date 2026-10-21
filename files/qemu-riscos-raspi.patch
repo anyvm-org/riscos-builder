@@ -1910,7 +1910,7 @@
      s->frame_number = (s->frame_number + frcnt) & 0xffff;
      s->hfnum = s->frame_number & HFNUM_MAX_FRNUM;
  
-@@ -457,7 +468,14 @@
+@@ -457,7 +468,15 @@
      s->fi = USB_FRMINTVL - 1;
      s->hprt0 |= HPRT0_CONNDET | HPRT0_CONNSTS;
  
@@ -1921,12 +1921,13 @@
 +     * guest with SOF interrupts throughout enumeration -- and, if a device
 +     * is present at power-on, from the first moment its driver unmasks
 +     * interrupts. dwc2_bus_start() is called from the HPRT0 write handler
-+     * when the port becomes enabled instead.
++     * instead, when the port becomes enabled and when a port reset
++     * completes.
 +     */
      dwc2_raise_global_irq(s, GINTSTS_PRTINT);
  }
  
-@@ -878,6 +896,8 @@
+@@ -878,6 +897,8 @@
      uint32_t *mmio;
      uint32_t tval, told, old;
      int prst = 0;
@@ -1935,7 +1936,7 @@
      int iflg = 0;
  
      if (addr < HCFG || addr > HPRT0) {
-@@ -900,6 +920,7 @@
+@@ -900,6 +921,7 @@
          return;
      case HAINTMSK:
          val &= 0xffff;
@@ -1943,7 +1944,7 @@
          break;
      case HPRT0:
          /* don't allow clearing of read-only bits */
-@@ -929,6 +950,12 @@
+@@ -929,6 +951,12 @@
                  prst = 1;
              }
          }
@@ -1956,11 +1957,22 @@
          if (val & (HPRT0_OVRCURRCHG | HPRT0_ENACHG | HPRT0_CONNDET)) {
              iflg = 1;
          } else {
-@@ -951,6 +978,28 @@
- 
+@@ -951,6 +979,39 @@
+
      *mmio = val;
- 
-+    if (pena > 0) {
+
++    /*
++     * Frame the bus while the port is enabled: on the guest's own enable
++     * edge, and whenever a port reset completes (prst). The reset case is
++     * not covered by the edge test: usb_port_reset() detaches and
++     * re-attaches the device, and the detach stops the SOFs, but the
++     * guest's write that ends the reset finds ENA already set from before
++     * the reset, so pena stays 0 and nothing restarts them. RISC OS resets
++     * the port a second time when the Wimp starts; without this every
++     * periodic (interrupt) transfer queued after that point waits forever
++     * on a frozen HFNUM -- no USB keyboard, no hub status interrupt.
++     */
++    if (pena > 0 || prst) {
 +        dwc2_bus_start(s);
 +    } else if (pena < 0) {
 +        dwc2_bus_stop(s);

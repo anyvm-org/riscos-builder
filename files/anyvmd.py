@@ -24,8 +24,8 @@ $.Programming.Python.!Python27 with a complete standard library.
 
 Nothing here may write to the console.  The agent runs from a Tasks hook
 under the Wimp, and any console output opens the single-tasking output
-screen, which waits for a keypress at the end -- and the BCM2835 ROM has no
-USB keyboard driver, so that wait never ends.  Diagnostics go to a log FILE.
+screen, which waits for a keypress at the end -- and the build attaches no
+keyboard device, so that wait never ends.  Diagnostics go to a log FILE.
 """
 
 import os

@@ -30,7 +30,13 @@
 #  5. dwc2 counted frames by dividing a nanosecond delta by a bit-time
 #     count, so HFNUM advanced 83 frames per frame and wrapped every 0.2s.
 #  6. dwc2 started framing the bus when a device was plugged in rather than
-#     when the guest enabled the port.
+#     when the guest enabled the port. The bus is also (re)started when a
+#     port reset completes: the reset detaches and re-attaches the device,
+#     which stops the SOFs, and the enable edge alone does not restart them
+#     when the port was already enabled before the reset. RISC OS resets
+#     the port a second time when the Wimp starts, and until this was
+#     added no interrupt transfer was ever issued after that point -- which
+#     is why the USB keyboard appeared not to work (riscos-vm#12).
 #  7. dwc2 never re-evaluated GINTSTS.HCHINT on a HAINTMSK write. HCHINT is
 #     a read-only summary of HAINT & HAINTMSK, so a driver that quietens a
 #     channel by masking it -- which RISC OS does after every control

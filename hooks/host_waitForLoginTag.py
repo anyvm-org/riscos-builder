@@ -1,10 +1,11 @@
 # waitForLoginTag hook for RISC OS. Host-side python, exec()'d into
 # build.py's globals.
 #
-# There is no login prompt to wait for and no console to read it from: the
-# BCM2835 ROM has no USB keyboard driver, so RISC OS boots straight to the
-# desktop announcing "No keyboard present - autobooting" and never asks
-# anything. The engine's console login-tag wait could only ever time out
+# There is no login prompt to wait for and no console to read it from: RISC
+# OS writes nothing to the serial port and boots straight to the desktop
+# (printing "No keyboard present - autobooting" on the way, because its
+# 5-second boot-time USB discovery finds nothing under QEMU; the desktop
+# rescans later). The engine's console login-tag wait could only ever time out
 # here, and a waitForLoginTag hook short-circuits start_and_wait(), so this
 # replaces it with the only readiness signal that means anything for this
 # guest: the anyvm agent answering the marker probe.
@@ -27,8 +28,8 @@
 # DEVNULL. What this hook can offer instead is the console -- RISC OS writes
 # nothing to serial, but the web console screenshot build.py captures shows
 # how far the desktop got, and a boot stopped on an error box is the classic
-# shape (an un-X-prefixed command in an injected script, which this guest
-# cannot dismiss because it has no keyboard).
+# shape (an un-X-prefixed command in an injected script, which nothing in
+# the build can dismiss: the build attaches no keyboard device).
 
 import time as _ro_time
 
@@ -47,7 +48,7 @@ if not _ro_up:
     log("FATAL: riscos waitForLoginTag: the agent never answered the probe.")
     log("       Look at the captured console below and at screen.png in the "
         "build artifacts: a desktop with an error box means an injected "
-        "script raised one (every line must be X-prefixed -- this guest has "
+        "script raised one (every line must be X-prefixed -- the build has "
         "no keyboard to dismiss it); a bare desktop means the Tasks entry "
         "ran but Python or the fetch failed.")
     sh("cat _screenText.txt 2>/dev/null || true")
