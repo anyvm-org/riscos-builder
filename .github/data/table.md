@@ -99,12 +99,16 @@
 > would then do nothing at all.
 >
 > Sync was settled on the running guest rather than assumed. There is no sshd
-> and no ssh client (so no rsync / sshfs / scp) and no 9P client. `Fat32FS`
-> (1.63) *is* loaded and could in principle carry files on the FAT boot
-> partition, but it serves removable media and cannot see the SD card's own
-> boot partition -- `::0`, `::4` and `::PiBoot` all resolve to nothing, and
-> `Fat32Map`, despite the name, is a DOS-extension-to-filetype table rather
-> than a disc mapping.
+> and no ssh client (so no rsync / sshfs / scp) and no 9P client. The SD
+> card's FAT boot partition *is* reachable from the guest: `$.!Boot.Loader` is
+> a `DOSFS` image file onto it, read and write (`*Cat $.!Boot.Loader` lists
+> `RISCOS/IMG`, `CONFIG/TXT`, `START/ELF`...). It is not a sync channel,
+> though: the host can only get at that partition with the disc closed, so it
+> would be a drop box for before boot and after shutdown, and tar over the
+> agent already covers both directions live. (`Fat32fs` 1.63 is unrelated; it
+> serves removable FAT media such as a FAT32 USB stick, and `Fat32Map` is its
+> DOS-extension-to-filetype table.) An earlier version of this note said the
+> boot partition could not be seen at all; that was wrong (riscos-vm#13).
 
 How the images are built:
 
